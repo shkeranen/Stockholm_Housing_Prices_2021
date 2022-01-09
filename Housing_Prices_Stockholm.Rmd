@@ -1,0 +1,139 @@
+---
+title: "Stockholm Housing Prices"
+author: "Selja"
+date: "1/9/2022"
+output: html_document
+---
+
+## Setting up my enviroment
+```{r loading packages}
+
+library(sf)
+library(tidyverse)
+library(jsonlite)
+library("dplyr") 
+library("tidyr")
+```
+## Accesing the GEO location data for Sweden
+```{r Accesing to the GEO location data for Sweden}
+
+tmp <- tempfile()
+download.file("http://api.thenmap.net/v2/se-7/geo/2020-06-06", destfile = tmp)
+
+mun_name <- fromJSON("http://api.thenmap.net/v2/se-7/data/2020-06-06?language=sv&data_props=name|shapeid|is_in") %>% 
+  unnest(is_in) %>% 
+  rename(county = is_in)
+
+```
+## Joining the two datasets
+```{r Joining the 2 datasets}
+mun <- read_sf(tmp) %>% 
+  left_join(mun_name, by = c("id" = "shapeid")) 
+
+```
+## Filtering the dataset to show only Stockholm area
+```{r}
+stockholm_mun <- mun %>% 
+  filter(county == "Stockholms län") %>% 
+  mutate(fill_data = rnorm(nrow(.))) 
+```
+#Plotting the dataset
+```{r}
+ggplot(stockholm_mun) +
+  geom_sf(aes(fill = fill_data)) +
+  scale_fill_viridis_c() +
+  theme_void()
+```
+## Let's add the average housing prices. This data can be find at https://www.maklarstatistik.se/ and check the column names.
+
+```{r}
+library(readxl)
+
+house_price <- read_excel("housing_stockholm_2021.xlsx")
+
+colnames(house_price)
+```
+## Renaming some of the column names for merging and clarity
+```{r}
+names(house_price) [names(house_price) == "Områden"] <- "name"
+names(house_price) [names(house_price) == "Kr/kvm"] <- "PricePerSqm"
+
+View(house_price)
+```
+## Merging housing prices and geo data by name column
+
+```{r}
+total <- merge(stockholm_mun,house_price, by = "name")
+```
+## Plotting the data.
+
+```{r}
+ggplot(data = total) +
+  geom_sf() +
+  geom_sf(data = total, aes(fill = PricePerSqm)) +
+  scale_fill_viridis_c(trans = "sqrt", alpha = .4) +
+  theme_void()
+```
+
+
+## Let's break the Price per Sqm to intervals
+
+```{r}
+library(classInt)
+
+breaks_qt <- classIntervals(c(min(total$PricePerSqm),0,total$PricePerSqm), n = 7, style = "quantile")
+
+breaks_qt
+
+total <- mutate(total, PricePerSqm_cat = cut(PricePerSqm, breaks_qt$brks)) 
+
+total <- cbind(total, st_coordinates(st_centroid(total)))
+
+```
+## Plotting the data with new intervals
+```{r}
+ggplot(total) + 
+  geom_sf(aes(fill=PricePerSqm_cat)) +
+  geom_label(data = total, aes(X, Y, label = name), size = 3) +
+  scale_fill_brewer(palette = "OrRd") 
+```
+
+
+## To avoid the overlapping, ggrepel library is applied
+```{r}
+library(ggrepel)
+```
+## Let's plot the result to see what is the outcome now.
+```{r}
+ggplot(total) + 
+  geom_sf(aes(fill=PricePerSqm_cat)) +
+  geom_text_repel(data = total, aes(X, Y, label = name))+
+  scale_fill_brewer(palette = "OrRd") 
+```
+
+
+## Still quite hard to read, let's try without labels.
+
+```{r}
+ggplot(total) + 
+  geom_sf(aes(fill = PricePerSqm_cat), show.legend = TRUE) + 
+  geom_sf_label(aes(label = NA), label.padding = unit(1, "mm")) +
+  scale_fill_brewer(palette = "OrRd")
+```
+
+
+## Let's try with another color scheme and some of the labels.
+
+```{r}
+ggplot(total) + 
+  geom_sf(aes(fill=PricePerSqm_cat)) +
+  geom_text_repel(data = total, aes(X, Y, label = name), nudge_y = c(0.04))+
+  scale_fill_viridis_d()
+```
+
+
+
+### For future work, it would be handy to cut the amount of labels for readability
+### Interval can be changed to enchance the readability
+### Naming and other visual components should be added
+### But this will do for now, such a fun Saturday project!
