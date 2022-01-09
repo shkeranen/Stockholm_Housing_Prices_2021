@@ -13,3 +13,8 @@ This project is done by R.
 From the map we can see that the immediate city center is the most expensive and prices start to drop when leaving the center.
 
 A fun saturday project which allows practising R and ggplot!
+
+For future work, it would be handy to cut the amount of labels for readability
+Interval can be changed to enchance the readability
+Naming and other visual components should be added
+
